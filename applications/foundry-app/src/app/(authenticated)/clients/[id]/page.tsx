@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getClient } from "@/lib/clients";
 import { getGoDaddyAccount } from "@/lib/godaddy";
+import { getProjects } from "@/lib/projects";
 import Badge from "@/components/Badge";
 import Card from "@/components/Card";
 import GoDaddyChecklist from "@/components/GoDaddyChecklist";
@@ -21,6 +22,7 @@ export default async function ClientDetailPage({
   }
 
   const godaddy = await getGoDaddyAccount(id);
+  const projects = await getProjects({ clientId: id });
 
   return (
     <div>
@@ -136,12 +138,38 @@ export default async function ClientDetailPage({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Card>
-          <h2 className="text-sm font-semibold mb-2" style={{ color: "var(--text-muted)" }}>
-            Projects
-          </h2>
-          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-            No projects yet. Project management coming in Phase 3.
-          </p>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold" style={{ color: "var(--text-muted)" }}>
+              Projects
+            </h2>
+            <Link
+              href={`/projects/new`}
+              className="text-xs hover:underline"
+              style={{ color: "var(--accent)" }}
+            >
+              + New
+            </Link>
+          </div>
+          {projects.length === 0 ? (
+            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+              No projects yet.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {projects.map((p) => (
+                <li key={p.id} className="flex items-center justify-between text-sm">
+                  <Link
+                    href={`/projects/${p.id}`}
+                    className="hover:underline"
+                    style={{ color: "var(--accent)" }}
+                  >
+                    {p.name}
+                  </Link>
+                  <Badge value={p.phase} />
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
         <Card>
           <h2 className="text-sm font-semibold mb-2" style={{ color: "var(--text-muted)" }}>
