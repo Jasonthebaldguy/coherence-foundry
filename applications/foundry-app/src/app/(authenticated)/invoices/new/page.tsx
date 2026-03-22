@@ -1,0 +1,37 @@
+import Link from "next/link";
+import InvoiceForm from "@/components/InvoiceForm";
+import {
+  createInvoice,
+  getClientsForInvoice,
+  getProjectsForInvoice,
+  getNextInvoiceNumber,
+} from "@/lib/invoices";
+
+export default async function NewInvoicePage() {
+  const [clients, projects, nextNumber] = await Promise.all([
+    getClientsForInvoice(),
+    getProjectsForInvoice(),
+    getNextInvoiceNumber(),
+  ]);
+
+  return (
+    <div>
+      <div className="mb-6">
+        <Link
+          href="/invoices"
+          className="text-sm hover:underline"
+          style={{ color: "var(--text-muted)" }}
+        >
+          &larr; Back to Invoices
+        </Link>
+        <h1 className="text-xl font-semibold mt-2">New Invoice</h1>
+      </div>
+      <InvoiceForm
+        clients={clients}
+        projects={projects}
+        defaultInvoiceNumber={nextNumber}
+        action={createInvoice}
+      />
+    </div>
+  );
+}

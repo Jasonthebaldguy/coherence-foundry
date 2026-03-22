@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getClient } from "@/lib/clients";
 import { getGoDaddyAccount } from "@/lib/godaddy";
 import { getProjects } from "@/lib/projects";
+import { getInvoices } from "@/lib/invoices";
 import Badge from "@/components/Badge";
 import Card from "@/components/Card";
 import GoDaddyChecklist from "@/components/GoDaddyChecklist";
@@ -23,6 +24,7 @@ export default async function ClientDetailPage({
 
   const godaddy = await getGoDaddyAccount(id);
   const projects = await getProjects({ clientId: id });
+  const invoices = await getInvoices({ clientId: id });
 
   return (
     <div>
@@ -172,12 +174,43 @@ export default async function ClientDetailPage({
           )}
         </Card>
         <Card>
-          <h2 className="text-sm font-semibold mb-2" style={{ color: "var(--text-muted)" }}>
-            Invoices
-          </h2>
-          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-            No invoices yet. Invoicing coming in Phase 4.
-          </p>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold" style={{ color: "var(--text-muted)" }}>
+              Invoices
+            </h2>
+            <Link
+              href={`/invoices/new`}
+              className="text-xs hover:underline"
+              style={{ color: "var(--accent)" }}
+            >
+              + New
+            </Link>
+          </div>
+          {invoices.length === 0 ? (
+            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+              No invoices yet.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {invoices.map((inv) => (
+                <li key={inv.id} className="flex items-center justify-between text-sm">
+                  <Link
+                    href={`/invoices/${inv.id}`}
+                    className="hover:underline"
+                    style={{ color: "var(--accent)" }}
+                  >
+                    {inv.invoice_number}
+                  </Link>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">
+                      ${Number(inv.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                    <Badge value={inv.status} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
       </div>
     </div>
