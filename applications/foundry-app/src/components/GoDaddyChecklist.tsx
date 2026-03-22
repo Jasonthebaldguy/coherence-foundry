@@ -1,18 +1,10 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { upsertGoDaddyAccount } from "@/lib/godaddy";
-import type { GoDaddyAccount } from "@/types/database";
+import { DEFAULT_CHECKLIST } from "@/lib/godaddy-defaults";
+import type { GoDaddyAccount, ChecklistItem } from "@/types/database";
 import Card from "./Card";
-
-const checklistItems: { key: keyof GoDaddyAccount; label: string }[] = [
-  { key: "wordpress_installed", label: "WordPress Installed" },
-  { key: "avada_installed", label: "Avada Theme Installed" },
-  { key: "ssl_configured", label: "SSL Certificate Configured" },
-  { key: "dns_configured", label: "DNS Configured" },
-  { key: "admin_access_granted", label: "Admin Access Granted to Client" },
-  { key: "handover_complete", label: "Handover Complete" },
-];
 
 export default function GoDaddyChecklist({
   clientId,
@@ -21,6 +13,11 @@ export default function GoDaddyChecklist({
   clientId: string;
   initial: GoDaddyAccount | null;
 }) {
+  const [items, setItems] = useState<ChecklistItem[]>(
+    initial?.checklist_items?.length ? initial.checklist_items : DEFAULT_CHECKLIST
+  );
+  const [newLabel, setNewLabel] = useState("");
+
   const boundAction = upsertGoDaddyAccount.bind(null, clientId);
 
   const [error, formAction, isPending] = useActionState(
@@ -35,10 +32,28 @@ export default function GoDaddyChecklist({
     null
   );
 
-  const completed = initial
-    ? checklistItems.filter((item) => initial[item.key] === true).length
-    : 0;
-  const total = checklistItems.length;
+  function toggleItem(key: string) {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.key === key ? { ...item, done: !item.done } : item
+      )
+    );
+  }
+
+  function addItem() {
+    const label = newLabel.trim();
+    if (!label) return;
+    const key = label.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+    setItems((prev) => [...prev, { key, label, done: false }]);
+    setNewLabel("");
+  }
+
+  function removeItem(key: string) {
+    setItems((prev) => prev.filter((item) => item.key !== key));
+  }
+
+  const completed = items.filter((i) => i.done).length;
+  const total = items.length;
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
 
   return (
@@ -75,6 +90,8 @@ export default function GoDaddyChecklist({
       )}
 
       <form action={formAction} className="space-y-4">
+        <input type="hidden" name="checklist_items" value={JSON.stringify(items)} />
+
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-muted)" }}>
@@ -112,21 +129,51 @@ export default function GoDaddyChecklist({
         </div>
 
         <div className="space-y-2">
-          {checklistItems.map(({ key, label }) => (
-            <label
-              key={key}
-              className="flex items-center gap-3 px-3 py-2 rounded-md text-sm cursor-pointer"
+          {items.map((item) => (
+            <div
+              key={item.key}
+              className="flex items-center gap-3 px-3 py-2 rounded-md text-sm group"
               style={{ background: "var(--bg-primary)" }}
             >
               <input
                 type="checkbox"
-                name={key}
-                defaultChecked={initial ? (initial[key] as boolean) : false}
-                className="w-4 h-4 accent-[var(--accent)]"
+                checked={item.done}
+                onChange={() => toggleItem(item.key)}
+                className="w-4 h-4 accent-[var(--accent)] cursor-pointer"
               />
-              {label}
-            </label>
+              <span className="flex-1" style={{ textDecoration: item.done ? "line-through" : "none", color: item.done ? "var(--text-muted)" : "var(--text-primary)" }}>
+                {item.label}
+              </span>
+              <button
+                type="button"
+                onClick={() => removeItem(item.key)}
+                className="opacity-0 group-hover:opacity-100 text-xs px-1.5 py-0.5 rounded transition-opacity"
+                style={{ color: "var(--red)" }}
+                title="Remove step"
+              >
+                &times;
+              </button>
+            </div>
           ))}
+        </div>
+
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newLabel}
+            onChange={(e) => setNewLabel(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addItem(); } }}
+            placeholder="Add a step..."
+            className="flex-1 text-sm"
+          />
+          <button
+            type="button"
+            onClick={addItem}
+            className="px-3 py-1.5 rounded-md text-xs font-medium"
+            style={{ background: "var(--bg-tertiary)", color: "var(--text-secondary)" }}
+          >
+            + Add
+          </button>
         </div>
 
         <div>

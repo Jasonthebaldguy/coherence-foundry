@@ -2,9 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createServerSupabase } from "./supabase-server";
-import type { GoDaddyAccount } from "@/types/database";
-
-type GoDaddyUpsert = Omit<GoDaddyAccount, "id" | "created_at" | "updated_at">;
+import type { GoDaddyAccount, ChecklistItem } from "@/types/database";
+import { DEFAULT_CHECKLIST } from "./godaddy-defaults";
 
 export async function getGoDaddyAccount(clientId: string) {
   const supabase = await createServerSupabase();
@@ -26,17 +25,24 @@ export async function upsertGoDaddyAccount(clientId: string, formData: FormData)
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthorized");
 
-  const record: GoDaddyUpsert = {
+  // Parse checklist items from form
+  const itemsJson = formData.get("checklist_items") as string;
+  const checklist: ChecklistItem[] = itemsJson
+    ? JSON.parse(itemsJson)
+    : DEFAULT_CHECKLIST;
+
+  const record = {
     client_id: clientId,
     domain: (formData.get("domain") as string) || null,
     hosting_plan: (formData.get("hosting_plan") as string) || null,
     godaddy_email: (formData.get("godaddy_email") as string) || null,
-    wordpress_installed: formData.get("wordpress_installed") === "on",
-    avada_installed: formData.get("avada_installed") === "on",
-    ssl_configured: formData.get("ssl_configured") === "on",
-    dns_configured: formData.get("dns_configured") === "on",
-    admin_access_granted: formData.get("admin_access_granted") === "on",
-    handover_complete: formData.get("handover_complete") === "on",
+    wordpress_installed: checklist.some((i) => i.key === "wordpress_installed" && i.done),
+    avada_installed: checklist.some((i) => i.key === "avada_installed" && i.done),
+    ssl_configured: checklist.some((i) => i.key === "ssl_configured" && i.done),
+    dns_configured: checklist.some((i) => i.key === "dns_configured" && i.done),
+    admin_access_granted: checklist.some((i) => i.key === "admin_access_granted" && i.done),
+    handover_complete: checklist.some((i) => i.key === "handover_complete" && i.done),
+    checklist_items: checklist,
     setup_notes: (formData.get("setup_notes") as string) || null,
   };
 

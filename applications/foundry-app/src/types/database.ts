@@ -24,6 +24,12 @@ export interface Client {
   updated_at: string;
 }
 
+export interface ChecklistItem {
+  key: string;
+  label: string;
+  done: boolean;
+}
+
 export interface GoDaddyAccount {
   id: string;
   client_id: string;
@@ -36,6 +42,7 @@ export interface GoDaddyAccount {
   dns_configured: boolean;
   admin_access_granted: boolean;
   handover_complete: boolean;
+  checklist_items: ChecklistItem[];
   setup_notes: string | null;
   created_at: string;
   updated_at: string;
