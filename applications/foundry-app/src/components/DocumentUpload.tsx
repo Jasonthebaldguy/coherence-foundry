@@ -11,6 +11,8 @@ interface Document {
   doc_type: string;
   include_in_context: boolean;
   description: string | null;
+  relevant_session_types: string[];
+  context_priority: number;
   uploaded_at: string;
 }
 
@@ -46,6 +48,8 @@ export default function DocumentUpload({
   const [uploading, setUploading] = useState(false);
   const [docType, setDocType] = useState("general");
   const [includeInContext, setIncludeInContext] = useState(false);
+  const [relevantTypes, setRelevantTypes] = useState<string[]>([]);
+  const [contextPriority, setContextPriority] = useState(50);
   const [description, setDescription] = useState("");
   const [showUpload, setShowUpload] = useState(false);
 
@@ -61,6 +65,10 @@ export default function DocumentUpload({
     formData.append("doc_type", docType);
     formData.append("include_in_context", String(includeInContext));
     if (description) formData.append("description", description);
+    if (includeInContext) {
+      formData.append("relevant_session_types", JSON.stringify(relevantTypes));
+      formData.append("context_priority", String(contextPriority));
+    }
 
     try {
       console.log("[DOC UPLOAD] Starting upload...", { clientId, projectId, docType, includeInContext });
@@ -88,6 +96,8 @@ export default function DocumentUpload({
         setDescription("");
         setDocType("general");
         setIncludeInContext(false);
+        setRelevantTypes([]);
+        setContextPriority(50);
         if (fileRef.current) fileRef.current.value = "";
         router.refresh();
       }
@@ -186,6 +196,55 @@ export default function DocumentUpload({
             </span>
           </label>
 
+          {includeInContext && (
+            <div className="ml-6 space-y-2 p-3 bg-white border border-gray-200 rounded">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Relevant session types
+                  <span className="text-gray-400 font-normal"> — none = all types</span>
+                </label>
+                <div className="flex flex-wrap gap-3">
+                  {[
+                    { value: "discovery", label: "Discovery" },
+                    { value: "branding", label: "Branding" },
+                    { value: "scope_review", label: "Scope Review" },
+                    { value: "general", label: "General" },
+                  ].map((t) => (
+                    <label key={t.value} className="flex items-center gap-1 text-xs text-gray-600">
+                      <input
+                        type="checkbox"
+                        checked={relevantTypes.includes(t.value)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setRelevantTypes((prev) => [...prev, t.value]);
+                          } else {
+                            setRelevantTypes((prev) => prev.filter((v) => v !== t.value));
+                          }
+                        }}
+                        className="rounded border-gray-300"
+                      />
+                      {t.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Priority
+                </label>
+                <select
+                  value={contextPriority}
+                  onChange={(e) => setContextPriority(Number(e.target.value))}
+                  className="border border-gray-300 rounded px-2 py-1 text-xs"
+                >
+                  <option value={75}>High</option>
+                  <option value={50}>Medium</option>
+                  <option value={25}>Low</option>
+                </select>
+              </div>
+            </div>
+          )}
+
           <button
             onClick={handleUpload}
             disabled={uploading}
@@ -214,9 +273,18 @@ export default function DocumentUpload({
                     {doc.doc_type}
                   </span>
                   {doc.include_in_context && (
-                    <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded">
-                      AI Context
-                    </span>
+                    <>
+                      <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded">
+                        AI Context
+                      </span>
+                      {doc.relevant_session_types && doc.relevant_session_types.length > 0 && (
+                        doc.relevant_session_types.map((t) => (
+                          <span key={t} className="text-xs px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">
+                            {t.replace("_", " ")}
+                          </span>
+                        ))
+                      )}
+                    </>
                   )}
                 </div>
                 <div className="text-xs text-gray-500 mt-0.5">

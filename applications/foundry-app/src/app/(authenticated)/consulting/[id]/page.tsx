@@ -44,6 +44,7 @@ export default async function ConsultingSessionPage({
       </div>
 
       <ChatUI
+        key={id}
         sessionId={id}
         initialMessages={messages}
         isComplete={session.status === "complete"}

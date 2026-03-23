@@ -209,7 +209,12 @@ export interface Document {
   storage_path: string;
   media_type: string;
   file_size: number | null;
-  doc_type: "brand_asset" | "mockup" | "content" | "contract" | "report" | "general";
+  doc_type: "brand_asset" | "mockup" | "content" | "contract" | "report" | "reference" | "general";
+  include_in_context: boolean;
+  extracted_text: string | null;
+  description: string | null;
+  relevant_session_types: string[];
+  context_priority: number;
   uploaded_at: string;
 }
 

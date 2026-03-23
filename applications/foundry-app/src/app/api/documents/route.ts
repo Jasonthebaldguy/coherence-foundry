@@ -18,6 +18,11 @@ export async function POST(request: NextRequest) {
   const docType = (formData.get("doc_type") as string) || "general";
   const includeInContext = formData.get("include_in_context") === "true";
   const description = formData.get("description") as string | null;
+  const relevantSessionTypesRaw = formData.get("relevant_session_types") as string | null;
+  const relevantSessionTypes: string[] = relevantSessionTypesRaw
+    ? JSON.parse(relevantSessionTypesRaw)
+    : [];
+  const contextPriority = parseInt(formData.get("context_priority") as string) || 50;
 
   if (!file) {
     return NextResponse.json({ error: "No file provided" }, { status: 400 });
@@ -93,6 +98,8 @@ export async function POST(request: NextRequest) {
       include_in_context: includeInContext,
       extracted_text: extractedText,
       description,
+      relevant_session_types: relevantSessionTypes,
+      context_priority: contextPriority,
     })
     .select()
     .single();
@@ -118,7 +125,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { documentId, includeInContext } = await request.json();
+  const { documentId, includeInContext, relevantSessionTypes, contextPriority } = await request.json();
 
   if (!documentId) {
     return NextResponse.json({ error: "Missing documentId" }, { status: 400 });
@@ -163,6 +170,12 @@ export async function PATCH(request: NextRequest) {
   };
   if (extractedText) {
     updateData.extracted_text = extractedText;
+  }
+  if (relevantSessionTypes !== undefined) {
+    updateData.relevant_session_types = relevantSessionTypes;
+  }
+  if (contextPriority !== undefined) {
+    updateData.context_priority = contextPriority;
   }
 
   const { error } = await supabase

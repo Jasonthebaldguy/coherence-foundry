@@ -300,26 +300,40 @@ async function buildSystemPrompt(
     findingsContext = fLines.join("\n");
   }
 
-  // Fetch documents marked for AI context
+  // Fetch documents marked for AI context, filtered by session type and priority
   const { data: contextDocs } = await supabase
     .from("documents")
-    .select("filename, doc_type, description, extracted_text")
+    .select("filename, doc_type, description, extracted_text, relevant_session_types, context_priority")
     .eq("client_id", clientId)
     .eq("include_in_context", true)
-    .not("extracted_text", "is", null);
+    .not("extracted_text", "is", null)
+    .or(`relevant_session_types.eq.{},relevant_session_types.cs.{${sessionType}}`)
+    .order("context_priority", { ascending: false });
 
   let docsContext = "";
   if (contextDocs && contextDocs.length > 0) {
+    // Token budget: estimate chars used by other context, leave room for docs
+    const MAX_CONTEXT_CHARS = 320_000; // ~80k tokens at 4 chars/token
+    const otherContextLength =
+      basePrompt.length +
+      typePrompt.length +
+      orgLines.join("\n").length +
+      clientContext.length +
+      findingsContext.length;
+    let charBudget = MAX_CONTEXT_CHARS - otherContextLength;
+
     const dLines: string[] = [];
     dLines.push("=== CLIENT DOCUMENTS ===");
     for (const d of contextDocs) {
+      const docSize = (d.extracted_text?.length || 0) + (d.filename.length + 50);
+      if (charBudget - docSize < 0 && dLines.length > 1) break; // always include at least one
       dLines.push(`--- ${d.filename} (${d.doc_type}) ---`);
       if (d.description) dLines.push(`Description: ${d.description}`);
       if (d.extracted_text) {
-        const text = d.extracted_text;
-        dLines.push(text);
+        dLines.push(d.extracted_text);
       }
       dLines.push("");
+      charBudget -= docSize;
     }
     dLines.push("=== END CLIENT DOCUMENTS ===");
     docsContext = dLines.join("\n");

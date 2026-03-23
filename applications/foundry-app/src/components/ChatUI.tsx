@@ -32,6 +32,10 @@ export default function ChatUI({
     cost_usd: 0,
   });
   const [lastUsage, setLastUsage] = useState<Usage | null>(null);
+  const [distilling, setDistilling] = useState(false);
+  const [distillationText, setDistillationText] = useState("");
+  const [showDistillation, setShowDistillation] = useState(false);
+  const [summaryValue, setSummaryValue] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const boundComplete = completeSession.bind(null, sessionId);
@@ -101,6 +105,42 @@ export default function ChatUI({
       ]);
     } finally {
       setSending(false);
+    }
+  }
+
+  async function handleDistill() {
+    if (distilling || messages.length === 0) return;
+    setDistilling(true);
+
+    try {
+      const res = await fetch("/api/distill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId }),
+      });
+
+      const data = await res.json();
+
+      if (data.error) {
+        setDistillationText(`Error: ${data.error}`);
+      } else {
+        setDistillationText(data.distillation);
+        if (data.usage) {
+          setLastUsage(data.usage);
+          setSessionUsage((prev) => ({
+            input_tokens: prev.input_tokens + data.usage.input_tokens,
+            output_tokens: prev.output_tokens + data.usage.output_tokens,
+            total_tokens: prev.total_tokens + data.usage.total_tokens,
+            cost_usd: Math.round((prev.cost_usd + data.usage.cost_usd) * 10000) / 10000,
+          }));
+        }
+      }
+      setShowDistillation(true);
+    } catch {
+      setDistillationText("Failed to distill conversation.");
+      setShowDistillation(true);
+    } finally {
+      setDistilling(false);
     }
   }
 
@@ -199,25 +239,79 @@ export default function ChatUI({
               Send
             </button>
           </form>
-          <form action={completeAction} className="flex gap-2 items-end">
-            <div className="flex-1">
-              <label className="block text-xs mb-1" style={{ color: "var(--text-muted)" }}>
-                Session summary (optional)
-              </label>
-              <input name="summary" placeholder="Brief summary of outcomes..." className="w-full text-sm" />
+
+          {/* Distillation + Complete Session */}
+          <div
+            className="p-3 rounded-lg border space-y-3"
+            style={{ background: "var(--bg-secondary)", borderColor: "var(--border)" }}
+          >
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleDistill}
+                disabled={distilling || sending || messages.length === 0}
+                className="px-3 py-1.5 rounded-md text-xs font-medium shrink-0"
+                style={{
+                  background: "var(--bg-tertiary)",
+                  color: "var(--text-secondary)",
+                  opacity: distilling || sending || messages.length === 0 ? 0.5 : 1,
+                }}
+              >
+                {distilling ? "Distilling..." : "Distill"}
+              </button>
+              <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                Lossless concept extraction from conversation
+              </span>
             </div>
-            <button
-              type="submit"
-              disabled={completing}
-              className="px-3 py-2 rounded-md text-xs font-medium shrink-0"
-              style={{ background: "var(--bg-tertiary)", color: "var(--text-secondary)" }}
-            >
-              {completing ? "..." : "Complete Session"}
-            </button>
-          </form>
-          {completeError && (
-            <p className="text-xs" style={{ color: "var(--red)" }}>{completeError}</p>
-          )}
+
+            {showDistillation && distillationText && (
+              <div className="space-y-2">
+                <div
+                  className="p-3 rounded text-xs whitespace-pre-wrap max-h-64 overflow-y-auto"
+                  style={{ background: "var(--bg-tertiary)", color: "var(--text-primary)" }}
+                >
+                  {distillationText}
+                </div>
+                <button
+                  onClick={() => {
+                    setSummaryValue(distillationText);
+                    setShowDistillation(false);
+                  }}
+                  className="px-2 py-1 rounded text-xs font-medium"
+                  style={{ background: "var(--accent)", color: "#fff" }}
+                >
+                  Use as Summary
+                </button>
+              </div>
+            )}
+
+            <form action={completeAction} className="flex gap-2 items-end">
+              <div className="flex-1">
+                <label className="block text-xs mb-1" style={{ color: "var(--text-muted)" }}>
+                  Session summary (optional)
+                </label>
+                <textarea
+                  name="summary"
+                  value={summaryValue}
+                  onChange={(e) => setSummaryValue(e.target.value)}
+                  placeholder="Brief summary of outcomes... or click Distill to auto-generate"
+                  className="w-full text-sm"
+                  rows={summaryValue ? 4 : 1}
+                  style={{ resize: "vertical" }}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={completing}
+                className="px-3 py-2 rounded-md text-xs font-medium shrink-0"
+                style={{ background: "var(--bg-tertiary)", color: "var(--text-secondary)" }}
+              >
+                {completing ? "..." : "Complete Session"}
+              </button>
+            </form>
+            {completeError && (
+              <p className="text-xs" style={{ color: "var(--red)" }}>{completeError}</p>
+            )}
+          </div>
         </div>
       ) : (
         <p className="text-sm text-center py-2" style={{ color: "var(--text-muted)" }}>
