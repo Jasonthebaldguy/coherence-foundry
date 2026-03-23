@@ -180,7 +180,7 @@ export interface ConsultingSession {
   id: string;
   client_id: string;
   project_id: string | null;
-  session_type: "discovery" | "branding" | "scope_review" | "general";
+  session_type: "discovery" | "branding" | "scope_review" | "deliverables" | "strategy" | "general";
   status: "active" | "complete";
   title: string | null;
   summary: string | null;

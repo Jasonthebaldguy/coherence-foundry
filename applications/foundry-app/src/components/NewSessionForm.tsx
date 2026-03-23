@@ -6,6 +6,8 @@ const sessionTypes = [
   { value: "discovery", label: "Discovery", desc: "Understand business goals, audience, and requirements" },
   { value: "branding", label: "Branding", desc: "Define visual identity, colors, fonts, and tone" },
   { value: "scope_review", label: "Scope Review", desc: "Review project scope, features, and timeline" },
+  { value: "deliverables", label: "Deliverables", desc: "Compile action items, decisions, and commitments from all prior sessions" },
+  { value: "strategy", label: "Full Strategy", desc: "Comprehensive strategy built from distilled insights across all sessions" },
   { value: "general", label: "General", desc: "Open-ended consulting conversation" },
 ] as const;
 

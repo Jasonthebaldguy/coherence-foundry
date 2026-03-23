@@ -339,11 +339,86 @@ async function buildSystemPrompt(
     docsContext = dLines.join("\n");
   }
 
-  // Assemble: base + type + org + client + findings + documents
+  // For deliverables and strategy sessions, inject prior session content
+  let priorSessionsContext = "";
+  if (sessionType === "deliverables" || sessionType === "strategy") {
+    const { data: completedSessions } = await supabase
+      .from("consulting_sessions")
+      .select("id, session_type, title, summary, started_at")
+      .eq("client_id", clientId)
+      .eq("status", "complete")
+      .order("started_at", { ascending: true });
+
+    if (completedSessions && completedSessions.length > 0) {
+      const pLines: string[] = [];
+      pLines.push("=== PRIOR SESSION CONTENT ===");
+      pLines.push(`${completedSessions.length} completed sessions for this client.\n`);
+
+      for (const cs of completedSessions) {
+        const date = new Date(cs.started_at).toLocaleDateString();
+        pLines.push(`--- [${date}] ${cs.session_type.toUpperCase()}: ${cs.title || "Untitled"} ---`);
+
+        if (cs.summary) {
+          pLines.push(cs.summary);
+        } else {
+          // No summary — fetch messages and build a compact transcript
+          const { data: sessionMsgs } = await supabase
+            .from("consulting_messages")
+            .select("role, content")
+            .eq("session_id", cs.id)
+            .neq("role", "system")
+            .order("created_at");
+
+          if (sessionMsgs && sessionMsgs.length > 0) {
+            for (const m of sessionMsgs) {
+              // Truncate individual messages to keep context manageable
+              const content = m.content.length > 500
+                ? m.content.slice(0, 500) + "..."
+                : m.content;
+              pLines.push(`[${m.role.toUpperCase()}]: ${content}`);
+            }
+          }
+        }
+        pLines.push("");
+      }
+
+      pLines.push("=== END PRIOR SESSION CONTENT ===");
+      priorSessionsContext = pLines.join("\n");
+    }
+  }
+
+  // Type-specific prompt fallbacks for new session types
+  let effectiveTypePrompt = typePrompt;
+  if (!effectiveTypePrompt) {
+    if (sessionType === "deliverables") {
+      effectiveTypePrompt = `You are compiling deliverables from prior consulting sessions. Your job is to extract and organize:
+
+1. DECISIONS MADE: Every decision agreed upon across all sessions, with context
+2. ACTION ITEMS: Every commitment, task, or next step — who owns it, what's the scope, any conditions
+3. OPEN ITEMS: Unresolved questions or dependencies that block progress
+4. TIMELINE: Any dates, deadlines, or sequencing discussed
+
+Present these as a structured, actionable checklist grouped by category. Reference which session each item came from. Flag any contradictions between sessions. Ask clarifying questions if commitments are ambiguous.`;
+    } else if (sessionType === "strategy") {
+      effectiveTypePrompt = `You are building a comprehensive strategy from the full history of consulting sessions with this client. All prior session content is provided in context.
+
+Your role:
+1. SYNTHESIZE: Identify the through-lines, patterns, and strategic direction across all sessions
+2. STRUCTURE: Organize findings into a coherent strategic framework
+3. GAPS: Identify what's missing — areas not yet explored, decisions deferred, assumptions untested
+4. RECOMMEND: Propose a strategic roadmap that connects findings to concrete outcomes
+5. PRIORITIZE: Help the client focus on what matters most given constraints and goals
+
+Build on what's been established. Don't re-discover — synthesize and advance. Reference specific prior session findings to ground your recommendations.`;
+    }
+  }
+
+  // Assemble: base + type + org + client + prior sessions + findings + documents
   const parts = [basePrompt];
-  if (typePrompt) parts.push(typePrompt);
+  if (effectiveTypePrompt) parts.push(effectiveTypePrompt);
   parts.push(orgLines.join("\n"));
   parts.push(clientContext);
+  if (priorSessionsContext) parts.push(priorSessionsContext);
   if (findingsContext) parts.push(findingsContext);
   if (docsContext) parts.push(docsContext);
 

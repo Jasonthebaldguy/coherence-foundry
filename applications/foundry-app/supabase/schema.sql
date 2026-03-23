@@ -154,7 +154,7 @@ create table public.consulting_sessions (
   client_id uuid references public.clients(id) on delete cascade not null,
   project_id uuid references public.projects(id) on delete set null,
   session_type text not null default 'discovery'
-    check (session_type in ('discovery', 'branding', 'scope_review', 'general')),
+    check (session_type in ('discovery', 'branding', 'scope_review', 'deliverables', 'strategy', 'general')),
   status text not null default 'active'
     check (status in ('active', 'complete')),
   title text,

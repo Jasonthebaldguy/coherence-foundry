@@ -33,3 +33,10 @@ alter table public.documents
 -- Usage tracking: distinguish chat vs distill calls
 alter table public.api_usage
   add column if not exists call_type text not null default 'chat';
+
+-- Add deliverables and strategy session types
+alter table public.consulting_sessions
+  drop constraint if exists consulting_sessions_session_type_check;
+alter table public.consulting_sessions
+  add constraint consulting_sessions_session_type_check
+  check (session_type in ('discovery', 'branding', 'scope_review', 'deliverables', 'strategy', 'general'));
