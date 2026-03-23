@@ -10,6 +10,7 @@ const nav = [
   { href: "/projects", label: "Projects", icon: "◫" },
   { href: "/invoices", label: "Invoices", icon: "▤" },
   { href: "/consulting", label: "Consulting", icon: "◆" },
+  { href: "/settings", label: "Settings", icon: "⚙" },
 ];
 
 export default function Shell({ children }: { children: React.ReactNode }) {

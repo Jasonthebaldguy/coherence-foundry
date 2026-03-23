@@ -5,6 +5,10 @@ import { redirect } from "next/navigation";
 import { createServerSupabase } from "./supabase-server";
 import type { ConsultingSession, ConsultingMessage } from "@/types/database";
 
+// ---------------------------------------------------------------------------
+// Queries
+// ---------------------------------------------------------------------------
+
 export async function getSessions(opts?: {
   status?: string;
   clientId?: string;
@@ -63,6 +67,279 @@ export async function getClientsForSession() {
   return data as { id: string; company_name: string }[];
 }
 
+// ---------------------------------------------------------------------------
+// Client context builder
+// ---------------------------------------------------------------------------
+
+async function buildClientContext(clientId: string): Promise<string> {
+  const supabase = await createServerSupabase();
+
+  // Fetch all client data in parallel
+  const [
+    { data: client },
+    { data: projects },
+    { data: invoices },
+    { data: sessions },
+    { data: godaddy },
+  ] = await Promise.all([
+    supabase
+      .from("clients")
+      .select("*")
+      .eq("id", clientId)
+      .single(),
+    supabase
+      .from("projects")
+      .select("name, phase, status, priority, estimated_budget, start_date, target_launch_date, description")
+      .eq("client_id", clientId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("invoices")
+      .select("invoice_number, invoice_type, amount, total_amount, status, due_date")
+      .eq("client_id", clientId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("consulting_sessions")
+      .select("session_type, title, summary, status, started_at")
+      .eq("client_id", clientId)
+      .eq("status", "complete")
+      .order("started_at", { ascending: false }),
+    supabase
+      .from("godaddy_accounts")
+      .select("*")
+      .eq("client_id", clientId)
+      .maybeSingle(),
+  ]);
+
+  if (!client) return "";
+
+  const lines: string[] = [];
+  lines.push("=== CLIENT CONTEXT ===");
+  lines.push(`Company: ${client.company_name}`);
+  if (client.industry) lines.push(`Industry: ${client.industry}`);
+  if (client.website) lines.push(`Website: ${client.website}`);
+  if (client.contact_name) lines.push(`Contact: ${client.contact_name}`);
+  if (client.contact_email) lines.push(`Email: ${client.contact_email}`);
+  if (client.contact_phone) lines.push(`Phone: ${client.contact_phone}`);
+  lines.push(`Status: ${client.status}`);
+
+  // Brand info
+  if (client.brand_colors || client.brand_fonts || client.brand_notes) {
+    lines.push("");
+    lines.push("--- Brand ---");
+    if (client.brand_colors && typeof client.brand_colors === "object") {
+      const colors = Object.entries(client.brand_colors)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(", ");
+      if (colors) lines.push(`Colors: ${colors}`);
+    }
+    if (client.brand_fonts && typeof client.brand_fonts === "object") {
+      const fonts = Object.entries(client.brand_fonts)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(", ");
+      if (fonts) lines.push(`Fonts: ${fonts}`);
+    }
+    if (client.brand_notes) lines.push(`Brand notes: ${client.brand_notes}`);
+  }
+
+  if (client.notes) {
+    lines.push("");
+    lines.push(`--- Notes ---`);
+    lines.push(client.notes);
+  }
+
+  // Projects
+  if (projects && projects.length > 0) {
+    lines.push("");
+    lines.push("--- Projects ---");
+    for (const p of projects) {
+      const budget = p.estimated_budget ? ` | Budget: $${Number(p.estimated_budget).toLocaleString()}` : "";
+      const dates = [
+        p.start_date ? `Start: ${p.start_date}` : null,
+        p.target_launch_date ? `Launch: ${p.target_launch_date}` : null,
+      ].filter(Boolean).join(", ");
+      lines.push(`• ${p.name} — Phase: ${p.phase}, Status: ${p.status}, Priority: ${p.priority}${budget}`);
+      if (dates) lines.push(`  ${dates}`);
+      if (p.description) lines.push(`  ${p.description.slice(0, 200)}`);
+    }
+  }
+
+  // GoDaddy hosting
+  if (godaddy) {
+    lines.push("");
+    lines.push("--- Hosting (GoDaddy) ---");
+    if (godaddy.domain) lines.push(`Domain: ${godaddy.domain}`);
+    if (godaddy.hosting_plan) lines.push(`Plan: ${godaddy.hosting_plan}`);
+    const checks = [
+      godaddy.wordpress_installed ? "✓ WordPress" : "✗ WordPress",
+      godaddy.avada_installed ? "✓ Avada" : "✗ Avada",
+      godaddy.ssl_configured ? "✓ SSL" : "✗ SSL",
+      godaddy.dns_configured ? "✓ DNS" : "✗ DNS",
+      godaddy.admin_access_granted ? "✓ Admin access" : "✗ Admin access",
+      godaddy.handover_complete ? "✓ Handover" : "✗ Handover",
+    ];
+    lines.push(`Setup: ${checks.join(", ")}`);
+    // Include dynamic checklist items if present
+    if (godaddy.checklist_items && Array.isArray(godaddy.checklist_items) && godaddy.checklist_items.length > 0) {
+      const custom = godaddy.checklist_items
+        .map((ci: { label: string; done: boolean }) => `${ci.done ? "✓" : "✗"} ${ci.label}`)
+        .join(", ");
+      lines.push(`Custom: ${custom}`);
+    }
+    if (godaddy.setup_notes) lines.push(`Notes: ${godaddy.setup_notes}`);
+  }
+
+  // Invoices summary
+  if (invoices && invoices.length > 0) {
+    lines.push("");
+    lines.push("--- Invoices ---");
+    const paid = invoices.filter((i) => i.status === "paid");
+    const outstanding = invoices.filter((i) =>
+      ["sent", "viewed", "overdue", "partial"].includes(i.status)
+    );
+    const paidTotal = paid.reduce((s, i) => s + Number(i.total_amount), 0);
+    const outTotal = outstanding.reduce((s, i) => s + Number(i.total_amount), 0);
+    lines.push(
+      `${invoices.length} invoices | $${paidTotal.toLocaleString()} paid | $${outTotal.toLocaleString()} outstanding`
+    );
+    for (const inv of invoices.slice(0, 5)) {
+      lines.push(`• ${inv.invoice_number} (${inv.invoice_type}) — $${Number(inv.total_amount).toFixed(2)} [${inv.status}]`);
+    }
+  }
+
+  // Previous consulting sessions (the key context footnotes)
+  if (sessions && sessions.length > 0) {
+    lines.push("");
+    lines.push("--- Previous Consulting Sessions ---");
+    for (const s of sessions) {
+      const date = new Date(s.started_at).toLocaleDateString();
+      lines.push(`• [${date}] ${s.session_type.toUpperCase()}: ${s.title || "Untitled"}`);
+      if (s.summary) {
+        lines.push(`  Summary: ${s.summary}`);
+      }
+    }
+  }
+
+  lines.push("=== END CLIENT CONTEXT ===");
+  return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// System prompt builder (reads from app_settings)
+// ---------------------------------------------------------------------------
+
+async function buildSystemPrompt(
+  sessionType: string,
+  clientId: string
+): Promise<string> {
+  const supabase = await createServerSupabase();
+
+  // Fetch prompts and org settings from database
+  const { data: settings } = await supabase
+    .from("app_settings")
+    .select("key, value")
+    .in("key", [
+      "prompt_base",
+      `prompt_${sessionType}`,
+      "org_name",
+      "org_description",
+      "org_methodology",
+      "org_standards",
+    ]);
+
+  const s: Record<string, string> = {};
+  for (const row of settings || []) {
+    s[row.key] = row.value;
+  }
+
+  // Fallback if settings table isn't seeded yet
+  const basePrompt =
+    s.prompt_base ||
+    "You are a web development consultant. Be concise, practical, and focused on actionable next steps.";
+  const typePrompt = s[`prompt_${sessionType}`] || "";
+
+  // Build org context
+  const orgLines: string[] = [];
+  orgLines.push("=== ORGANIZATION CONTEXT ===");
+  if (s.org_name) orgLines.push(`Company: ${s.org_name}`);
+  if (s.org_description) orgLines.push(`About: ${s.org_description}`);
+  if (s.org_methodology) {
+    orgLines.push("");
+    orgLines.push("--- Methodology ---");
+    orgLines.push(s.org_methodology);
+  }
+  if (s.org_standards) {
+    orgLines.push("");
+    orgLines.push("--- Technical Standards ---");
+    orgLines.push(s.org_standards);
+  }
+  orgLines.push("=== END ORGANIZATION CONTEXT ===");
+
+  // Build client context
+  const clientContext = await buildClientContext(clientId);
+
+  // Also fetch research findings for this client
+  const { data: findings } = await supabase
+    .from("research_findings")
+    .select("finding_type, title, content, relevance, source_url")
+    .eq("client_id", clientId)
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  let findingsContext = "";
+  if (findings && findings.length > 0) {
+    const fLines: string[] = [];
+    fLines.push("=== RESEARCH FINDINGS ===");
+    for (const f of findings) {
+      fLines.push(
+        `• [${f.finding_type}] ${f.title} (${f.relevance} relevance)`
+      );
+      fLines.push(`  ${f.content.slice(0, 300)}`);
+      if (f.source_url) fLines.push(`  Source: ${f.source_url}`);
+    }
+    fLines.push("=== END RESEARCH FINDINGS ===");
+    findingsContext = fLines.join("\n");
+  }
+
+  // Fetch documents marked for AI context
+  const { data: contextDocs } = await supabase
+    .from("documents")
+    .select("filename, doc_type, description, extracted_text")
+    .eq("client_id", clientId)
+    .eq("include_in_context", true)
+    .not("extracted_text", "is", null);
+
+  let docsContext = "";
+  if (contextDocs && contextDocs.length > 0) {
+    const dLines: string[] = [];
+    dLines.push("=== CLIENT DOCUMENTS ===");
+    for (const d of contextDocs) {
+      dLines.push(`--- ${d.filename} (${d.doc_type}) ---`);
+      if (d.description) dLines.push(`Description: ${d.description}`);
+      if (d.extracted_text) {
+        const text = d.extracted_text;
+        dLines.push(text);
+      }
+      dLines.push("");
+    }
+    dLines.push("=== END CLIENT DOCUMENTS ===");
+    docsContext = dLines.join("\n");
+  }
+
+  // Assemble: base + type + org + client + findings + documents
+  const parts = [basePrompt];
+  if (typePrompt) parts.push(typePrompt);
+  parts.push(orgLines.join("\n"));
+  parts.push(clientContext);
+  if (findingsContext) parts.push(findingsContext);
+  if (docsContext) parts.push(docsContext);
+
+  return parts.join("\n\n");
+}
+
+// ---------------------------------------------------------------------------
+// Mutations
+// ---------------------------------------------------------------------------
+
 export async function createSession(formData: FormData) {
   "use server";
   const supabase = await createServerSupabase();
@@ -72,7 +349,8 @@ export async function createSession(formData: FormData) {
   if (!user) throw new Error("Unauthorized");
 
   const clientId = formData.get("client_id") as string;
-  const sessionType = (formData.get("session_type") as ConsultingSession["session_type"]) || "discovery";
+  const sessionType =
+    (formData.get("session_type") as ConsultingSession["session_type"]) || "discovery";
   const title = (formData.get("title") as string) || `${sessionType} session`;
 
   const { data, error } = await supabase
@@ -89,8 +367,8 @@ export async function createSession(formData: FormData) {
 
   if (error) throw error;
 
-  // Add system prompt as first message
-  const systemPrompt = getSystemPrompt(sessionType);
+  // Build context-rich system prompt
+  const systemPrompt = await buildSystemPrompt(sessionType, clientId);
   await supabase.from("consulting_messages").insert({
     session_id: data.id,
     role: "system",
@@ -101,7 +379,11 @@ export async function createSession(formData: FormData) {
   redirect(`/consulting/${data.id}`);
 }
 
-export async function addMessage(sessionId: string, role: "user" | "assistant", content: string) {
+export async function addMessage(
+  sessionId: string,
+  role: "user" | "assistant",
+  content: string
+) {
   const supabase = await createServerSupabase();
   const { error } = await supabase.from("consulting_messages").insert({
     session_id: sessionId,
@@ -134,19 +416,4 @@ export async function completeSession(sessionId: string, formData: FormData) {
 
   revalidatePath("/consulting");
   revalidatePath(`/consulting/${sessionId}`);
-}
-
-function getSystemPrompt(sessionType: string): string {
-  const base = `You are a web development consultant for Coherence Foundry. You help clients plan and build professional WordPress/Avada websites on GoDaddy hosting. Be concise, practical, and focused on actionable next steps.`;
-
-  switch (sessionType) {
-    case "discovery":
-      return `${base}\n\nThis is a DISCOVERY session. Help the client articulate their business goals, target audience, must-have features, and content needs. Ask about their current online presence, competitors they admire, and timeline expectations. Produce a clear summary of requirements at the end.`;
-    case "branding":
-      return `${base}\n\nThis is a BRANDING session. Help the client define their visual identity — colors, fonts, tone of voice, imagery style. Ask about their existing brand materials, industry conventions, and what feeling they want visitors to have. Guide them toward a cohesive brand kit.`;
-    case "scope_review":
-      return `${base}\n\nThis is a SCOPE REVIEW session. Walk through the project scope with the client. Cover pages, features, content requirements, integrations, and timeline. Identify any gaps or risks. Confirm budget alignment and sign-off criteria.`;
-    default:
-      return base;
-  }
 }

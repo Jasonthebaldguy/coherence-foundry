@@ -51,6 +51,7 @@ export default async function InvoicesPage({
               <tr style={{ background: "var(--bg-secondary)" }}>
                 <th className="text-left px-4 py-2.5 font-medium" style={{ color: "var(--text-secondary)" }}>Invoice #</th>
                 <th className="text-left px-4 py-2.5 font-medium" style={{ color: "var(--text-secondary)" }}>Client</th>
+                <th className="text-left px-4 py-2.5 font-medium" style={{ color: "var(--text-secondary)" }}>Project</th>
                 <th className="text-left px-4 py-2.5 font-medium" style={{ color: "var(--text-secondary)" }}>Type</th>
                 <th className="text-right px-4 py-2.5 font-medium" style={{ color: "var(--text-secondary)" }}>Total</th>
                 <th className="text-left px-4 py-2.5 font-medium" style={{ color: "var(--text-secondary)" }}>Due</th>
@@ -75,6 +76,13 @@ export default async function InvoicesPage({
                   </td>
                   <td className="px-4 py-3" style={{ color: "var(--text-secondary)" }}>
                     {inv.clients?.company_name ?? "\u2014"}
+                  </td>
+                  <td className="px-4 py-3" style={{ color: "var(--text-secondary)" }}>
+                    {inv.projects?.name ? (
+                      <Link href={`/projects/${inv.project_id}`} className="hover:underline" style={{ color: "var(--accent)" }}>
+                        {inv.projects.name}
+                      </Link>
+                    ) : "\u2014"}
                   </td>
                   <td className="px-4 py-3 capitalize" style={{ color: "var(--text-secondary)" }}>
                     {inv.invoice_type}

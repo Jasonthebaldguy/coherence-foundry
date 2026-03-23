@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getProject } from "@/lib/projects";
 import { getTasks } from "@/lib/tasks";
+import { getInvoices } from "@/lib/invoices";
 import Badge from "@/components/Badge";
 import Card from "@/components/Card";
 import TaskBoard from "@/components/TaskBoard";
@@ -21,6 +22,7 @@ export default async function ProjectDetailPage({
   }
 
   const tasks = await getTasks(id);
+  const invoices = await getInvoices({ projectId: id });
 
   return (
     <div>
@@ -101,6 +103,67 @@ export default async function ProjectDetailPage({
         </h2>
         <TaskBoard projectId={id} tasks={tasks} />
       </div>
+
+      <Card className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold" style={{ color: "var(--text-muted)" }}>
+            Invoices
+          </h2>
+          <Link
+            href={`/invoices/new`}
+            className="text-xs hover:underline"
+            style={{ color: "var(--accent)" }}
+          >
+            + New Invoice
+          </Link>
+        </div>
+        {invoices.length === 0 ? (
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+            No invoices for this project yet.
+          </p>
+        ) : (
+          <div className="border rounded-lg overflow-hidden" style={{ borderColor: "var(--border)" }}>
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ background: "var(--bg-secondary)" }}>
+                  <th className="text-left px-3 py-2 font-medium" style={{ color: "var(--text-secondary)" }}>Invoice #</th>
+                  <th className="text-left px-3 py-2 font-medium" style={{ color: "var(--text-secondary)" }}>Type</th>
+                  <th className="text-right px-3 py-2 font-medium" style={{ color: "var(--text-secondary)" }}>Total</th>
+                  <th className="text-left px-3 py-2 font-medium" style={{ color: "var(--text-secondary)" }}>Due</th>
+                  <th className="text-left px-3 py-2 font-medium" style={{ color: "var(--text-secondary)" }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {invoices.map((inv) => (
+                  <tr key={inv.id} className="border-t" style={{ borderColor: "var(--border)" }}>
+                    <td className="px-3 py-2">
+                      <Link
+                        href={`/invoices/${inv.id}`}
+                        className="font-medium hover:underline"
+                        style={{ color: "var(--accent)" }}
+                      >
+                        {inv.invoice_number}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-2 capitalize" style={{ color: "var(--text-secondary)" }}>
+                      {inv.invoice_type}
+                    </td>
+                    <td className="px-3 py-2 text-right font-medium">
+                      ${Number(inv.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-3 py-2" style={{ color: "var(--text-secondary)" }}>
+                      {inv.due_date || "\u2014"}
+                    </td>
+                    <td className="px-3 py-2">
+                      <Badge value={inv.status} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
 
       {project.notes && (
         <Card>

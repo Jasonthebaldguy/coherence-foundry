@@ -4,6 +4,13 @@ import { useState, useRef, useEffect, useActionState } from "react";
 import { completeSession } from "@/lib/consulting";
 import type { ConsultingMessage } from "@/types/database";
 
+interface Usage {
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  cost_usd: number;
+}
+
 export default function ChatUI({
   sessionId,
   initialMessages,
@@ -18,6 +25,13 @@ export default function ChatUI({
   );
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [sessionUsage, setSessionUsage] = useState<Usage>({
+    input_tokens: 0,
+    output_tokens: 0,
+    total_tokens: 0,
+    cost_usd: 0,
+  });
+  const [lastUsage, setLastUsage] = useState<Usage | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const boundComplete = completeSession.bind(null, sessionId);
@@ -68,6 +82,17 @@ export default function ChatUI({
           ...prev,
           { id: crypto.randomUUID(), session_id: sessionId, role: "assistant", content: data.reply, created_at: new Date().toISOString() },
         ]);
+
+        // Track usage
+        if (data.usage) {
+          setLastUsage(data.usage);
+          setSessionUsage((prev) => ({
+            input_tokens: prev.input_tokens + data.usage.input_tokens,
+            output_tokens: prev.output_tokens + data.usage.output_tokens,
+            total_tokens: prev.total_tokens + data.usage.total_tokens,
+            cost_usd: Math.round((prev.cost_usd + data.usage.cost_usd) * 10000) / 10000,
+          }));
+        }
       }
     } catch {
       setMessages((prev) => [
@@ -79,8 +104,43 @@ export default function ChatUI({
     }
   }
 
+  function formatTokens(n: number): string {
+    if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+    return String(n);
+  }
+
+  function formatCost(n: number): string {
+    if (n < 0.01) return `$${n.toFixed(4)}`;
+    return `$${n.toFixed(2)}`;
+  }
+
   return (
     <div className="flex flex-col" style={{ height: "calc(100vh - 220px)" }}>
+      {/* Token usage bar */}
+      <div
+        className="flex items-center justify-between px-3 py-1.5 mb-2 rounded text-xs"
+        style={{ background: "var(--bg-tertiary)", color: "var(--text-muted)" }}
+      >
+        <div className="flex items-center gap-4">
+          <span>
+            Session: {formatTokens(sessionUsage.total_tokens)} tokens
+          </span>
+          <span>
+            Cost: {formatCost(sessionUsage.cost_usd)}
+          </span>
+        </div>
+        {lastUsage && (
+          <div className="flex items-center gap-3">
+            <span>
+              Last: {formatTokens(lastUsage.input_tokens)} in / {formatTokens(lastUsage.output_tokens)} out
+            </span>
+            <span>
+              {formatCost(lastUsage.cost_usd)}
+            </span>
+          </div>
+        )}
+      </div>
+
       <div
         className="flex-1 overflow-y-auto space-y-4 p-4 rounded-lg border mb-4"
         style={{ background: "var(--bg-secondary)", borderColor: "var(--border)" }}

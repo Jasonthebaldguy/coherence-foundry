@@ -19,6 +19,8 @@ export default async function InvoiceDetailPage({
     notFound();
   }
 
+  const hasLineItems = invoice.line_items && invoice.line_items.length > 0;
+
   return (
     <div>
       <div className="mb-6">
@@ -71,30 +73,99 @@ export default async function InvoiceDetailPage({
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-        <Card>
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>Amount</p>
-          <p className="text-lg font-semibold mt-1">
-            ${Number(invoice.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-          </p>
+      {/* Line Items Table */}
+      {hasLineItems ? (
+        <Card className="mb-6">
+          <h2 className="text-sm font-semibold mb-3" style={{ color: "var(--text-muted)" }}>
+            Line Items
+          </h2>
+          <div className="border rounded-lg overflow-hidden" style={{ borderColor: "var(--border)" }}>
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ background: "var(--bg-secondary)" }}>
+                  <th className="text-left px-3 py-2 font-medium" style={{ color: "var(--text-secondary)" }}>Description</th>
+                  <th className="text-right px-3 py-2 font-medium" style={{ color: "var(--text-secondary)" }}>Qty</th>
+                  <th className="text-right px-3 py-2 font-medium" style={{ color: "var(--text-secondary)" }}>Unit Price</th>
+                  <th className="text-right px-3 py-2 font-medium" style={{ color: "var(--text-secondary)" }}>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {invoice.line_items!.map((li) => (
+                  <tr key={li.id} className="border-t" style={{ borderColor: "var(--border)" }}>
+                    <td className="px-3 py-2">{li.description}</td>
+                    <td className="px-3 py-2 text-right">{Number(li.quantity)}</td>
+                    <td className="px-3 py-2 text-right">
+                      ${Number(li.unit_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-3 py-2 text-right font-medium">
+                      ${Number(li.line_total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t" style={{ borderColor: "var(--border)" }}>
+                  <td colSpan={3} className="px-3 py-2 text-right text-sm font-medium" style={{ color: "var(--text-muted)" }}>
+                    Subtotal
+                  </td>
+                  <td className="px-3 py-2 text-right font-semibold">
+                    ${Number(invoice.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </td>
+                </tr>
+                {Number(invoice.tax_amount) > 0 && (
+                  <tr>
+                    <td colSpan={3} className="px-3 py-1.5 text-right text-sm" style={{ color: "var(--text-muted)" }}>
+                      Tax
+                    </td>
+                    <td className="px-3 py-1.5 text-right">
+                      ${Number(invoice.tax_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                )}
+                <tr className="border-t" style={{ borderColor: "var(--border)" }}>
+                  <td colSpan={3} className="px-3 py-2 text-right text-sm font-bold">
+                    Total
+                  </td>
+                  <td className="px-3 py-2 text-right font-bold" style={{ color: "var(--accent)" }}>
+                    ${Number(invoice.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          {invoice.due_date && (
+            <p className="text-sm mt-3" style={{ color: "var(--text-muted)" }}>
+              Due: {invoice.due_date}
+            </p>
+          )}
         </Card>
-        <Card>
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>Tax</p>
-          <p className="text-lg font-semibold mt-1">
-            ${Number(invoice.tax_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-          </p>
-        </Card>
-        <Card>
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>Total</p>
-          <p className="text-lg font-semibold mt-1">
-            ${Number(invoice.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-          </p>
-        </Card>
-        <Card>
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>Due Date</p>
-          <p className="text-sm font-medium mt-1">{invoice.due_date || "\u2014"}</p>
-        </Card>
-      </div>
+      ) : (
+        /* Fallback: old-style single-amount view for legacy invoices */
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+          <Card>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>Amount</p>
+            <p className="text-lg font-semibold mt-1">
+              ${Number(invoice.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </p>
+          </Card>
+          <Card>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>Tax</p>
+            <p className="text-lg font-semibold mt-1">
+              ${Number(invoice.tax_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </p>
+          </Card>
+          <Card>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>Total</p>
+            <p className="text-lg font-semibold mt-1">
+              ${Number(invoice.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </p>
+          </Card>
+          <Card>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>Due Date</p>
+            <p className="text-sm font-medium mt-1">{invoice.due_date || "\u2014"}</p>
+          </Card>
+        </div>
+      )}
 
       <div className="mb-6">
         <InvoiceStatusAction invoiceId={id} currentStatus={invoice.status} />
@@ -103,7 +174,7 @@ export default async function InvoiceDetailPage({
       {invoice.description && (
         <Card className="mb-6">
           <h2 className="text-sm font-semibold mb-2" style={{ color: "var(--text-muted)" }}>
-            Description
+            Notes
           </h2>
           <p className="text-sm whitespace-pre-wrap">{invoice.description}</p>
         </Card>

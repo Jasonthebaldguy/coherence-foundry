@@ -140,6 +140,29 @@ export interface Invoice {
   // Joined fields
   clients?: Pick<Client, "company_name">;
   projects?: Pick<Project, "name"> | null;
+  line_items?: InvoiceLineItem[];
+}
+
+export interface ServiceItem {
+  id: string;
+  name: string;
+  description: string | null;
+  default_price: number;
+  category: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface InvoiceLineItem {
+  id: string;
+  invoice_id: string;
+  service_item_id: string | null;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  line_total: number;
+  sort_order: number;
+  created_at: string;
 }
 
 export interface Payment {

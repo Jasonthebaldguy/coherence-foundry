@@ -3,7 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createServerSupabase } from "./supabase-server";
-import type { Invoice, InvoiceStatus } from "@/types/database";
+import type { Invoice, InvoiceStatus, InvoiceLineItem, ServiceItem } from "@/types/database";
+
+// ---------------------------------------------------------------------------
+// Invoice queries
+// ---------------------------------------------------------------------------
 
 export async function getInvoices(opts?: {
   status?: string;
@@ -46,7 +50,17 @@ export async function getInvoice(id: string) {
     .single();
 
   if (error) throw error;
-  return data as Invoice;
+
+  // Fetch line items separately (ordered)
+  const { data: lineItems } = await supabase
+    .from("invoice_line_items")
+    .select("*")
+    .eq("invoice_id", id)
+    .order("sort_order");
+
+  const invoice = data as Invoice;
+  invoice.line_items = (lineItems as InvoiceLineItem[]) || [];
+  return invoice;
 }
 
 export async function getNextInvoiceNumber() {
@@ -97,6 +111,27 @@ export async function getProjectsForInvoice(clientId?: string) {
   return data as { id: string; name: string; client_id: string }[];
 }
 
+// ---------------------------------------------------------------------------
+// Invoice mutations
+// ---------------------------------------------------------------------------
+
+interface LineItemInput {
+  service_item_id?: string | null;
+  description: string;
+  quantity: number;
+  unit_price: number;
+}
+
+function parseLineItems(formData: FormData): LineItemInput[] {
+  const raw = formData.get("line_items") as string;
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw) as LineItemInput[];
+  } catch {
+    return [];
+  }
+}
+
 export async function createInvoice(formData: FormData) {
   "use server";
   const supabase = await createServerSupabase();
@@ -105,8 +140,16 @@ export async function createInvoice(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthorized");
 
-  const amount = Number(formData.get("amount")) || 0;
+  const lineItems = parseLineItems(formData);
   const taxAmount = Number(formData.get("tax_amount")) || 0;
+
+  // Calculate totals from line items
+  let subtotal = 0;
+  if (lineItems.length > 0) {
+    subtotal = lineItems.reduce((sum, li) => sum + li.quantity * li.unit_price, 0);
+  } else {
+    subtotal = Number(formData.get("amount")) || 0;
+  }
 
   const record = {
     client_id: formData.get("client_id") as string,
@@ -114,9 +157,9 @@ export async function createInvoice(formData: FormData) {
     invoice_number: formData.get("invoice_number") as string,
     invoice_type: (formData.get("invoice_type") as Invoice["invoice_type"]) || "milestone",
     description: (formData.get("description") as string) || null,
-    amount,
+    amount: subtotal,
     tax_amount: taxAmount,
-    total_amount: amount + taxAmount,
+    total_amount: subtotal + taxAmount,
     status: "draft" as InvoiceStatus,
     due_date: (formData.get("due_date") as string) || null,
   };
@@ -128,6 +171,23 @@ export async function createInvoice(formData: FormData) {
     .single();
 
   if (error) throw error;
+
+  // Insert line items
+  if (lineItems.length > 0) {
+    const rows = lineItems.map((li, i) => ({
+      invoice_id: data.id,
+      service_item_id: li.service_item_id || null,
+      description: li.description,
+      quantity: li.quantity,
+      unit_price: li.unit_price,
+      line_total: li.quantity * li.unit_price,
+      sort_order: i,
+    }));
+    const { error: liError } = await supabase
+      .from("invoice_line_items")
+      .insert(rows);
+    if (liError) throw liError;
+  }
 
   revalidatePath("/invoices");
   redirect(`/invoices/${data.id}`);
@@ -141,8 +201,15 @@ export async function updateInvoice(id: string, formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthorized");
 
-  const amount = Number(formData.get("amount")) || 0;
+  const lineItems = parseLineItems(formData);
   const taxAmount = Number(formData.get("tax_amount")) || 0;
+
+  let subtotal = 0;
+  if (lineItems.length > 0) {
+    subtotal = lineItems.reduce((sum, li) => sum + li.quantity * li.unit_price, 0);
+  } else {
+    subtotal = Number(formData.get("amount")) || 0;
+  }
 
   const record = {
     client_id: formData.get("client_id") as string,
@@ -150,9 +217,9 @@ export async function updateInvoice(id: string, formData: FormData) {
     invoice_number: formData.get("invoice_number") as string,
     invoice_type: (formData.get("invoice_type") as Invoice["invoice_type"]) || "milestone",
     description: (formData.get("description") as string) || null,
-    amount,
+    amount: subtotal,
     tax_amount: taxAmount,
-    total_amount: amount + taxAmount,
+    total_amount: subtotal + taxAmount,
     due_date: (formData.get("due_date") as string) || null,
   };
 
@@ -162,6 +229,28 @@ export async function updateInvoice(id: string, formData: FormData) {
     .eq("id", id);
 
   if (error) throw error;
+
+  // Replace line items: delete old, insert new
+  await supabase
+    .from("invoice_line_items")
+    .delete()
+    .eq("invoice_id", id);
+
+  if (lineItems.length > 0) {
+    const rows = lineItems.map((li, i) => ({
+      invoice_id: id,
+      service_item_id: li.service_item_id || null,
+      description: li.description,
+      quantity: li.quantity,
+      unit_price: li.unit_price,
+      line_total: li.quantity * li.unit_price,
+      sort_order: i,
+    }));
+    const { error: liError } = await supabase
+      .from("invoice_line_items")
+      .insert(rows);
+    if (liError) throw liError;
+  }
 
   revalidatePath("/invoices");
   revalidatePath(`/invoices/${id}`);
@@ -194,4 +283,72 @@ export async function updateInvoiceStatus(id: string, formData: FormData) {
 
   revalidatePath("/invoices");
   revalidatePath(`/invoices/${id}`);
+}
+
+// ---------------------------------------------------------------------------
+// Service Items
+// ---------------------------------------------------------------------------
+
+export async function getServiceItems(activeOnly = true) {
+  const supabase = await createServerSupabase();
+  let query = supabase
+    .from("service_items")
+    .select("*")
+    .order("name");
+
+  if (activeOnly) {
+    query = query.eq("is_active", true);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data as ServiceItem[];
+}
+
+export async function createServiceItem(formData: FormData) {
+  "use server";
+  const supabase = await createServerSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const record = {
+    name: formData.get("name") as string,
+    description: (formData.get("description") as string) || null,
+    default_price: Number(formData.get("default_price")) || 0,
+    category: (formData.get("category") as string) || null,
+    is_active: true,
+  };
+
+  const { error } = await supabase.from("service_items").insert(record);
+  if (error) throw error;
+
+  revalidatePath("/invoices/services");
+}
+
+export async function updateServiceItem(id: string, formData: FormData) {
+  "use server";
+  const supabase = await createServerSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const record = {
+    name: formData.get("name") as string,
+    description: (formData.get("description") as string) || null,
+    default_price: Number(formData.get("default_price")) || 0,
+    category: (formData.get("category") as string) || null,
+    is_active: formData.get("is_active") !== "false",
+  };
+
+  const { error } = await supabase
+    .from("service_items")
+    .update(record)
+    .eq("id", id);
+
+  if (error) throw error;
+
+  revalidatePath("/invoices/services");
 }

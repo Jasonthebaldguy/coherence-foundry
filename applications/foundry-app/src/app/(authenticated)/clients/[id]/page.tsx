@@ -4,9 +4,12 @@ import { getClient } from "@/lib/clients";
 import { getGoDaddyAccount } from "@/lib/godaddy";
 import { getProjects } from "@/lib/projects";
 import { getInvoices } from "@/lib/invoices";
+import { getSessions } from "@/lib/consulting";
+import { createServerSupabase, createServiceSupabase } from "@/lib/supabase-server";
 import Badge from "@/components/Badge";
 import Card from "@/components/Card";
 import GoDaddyChecklist from "@/components/GoDaddyChecklist";
+import DocumentUpload from "@/components/DocumentUpload";
 
 export default async function ClientDetailPage({
   params,
@@ -22,9 +25,18 @@ export default async function ClientDetailPage({
     notFound();
   }
 
+  const supabase = await createServerSupabase();
   const godaddy = await getGoDaddyAccount(id);
   const projects = await getProjects({ clientId: id });
   const invoices = await getInvoices({ clientId: id });
+  const sessions = await getSessions({ clientId: id });
+
+  const serviceSupabase = createServiceSupabase();
+  const { data: documents } = await serviceSupabase
+    .from("documents")
+    .select("id, filename, media_type, file_size, doc_type, include_in_context, description, uploaded_at")
+    .eq("client_id", id)
+    .order("uploaded_at", { ascending: false });
 
   return (
     <div>
@@ -138,7 +150,11 @@ export default async function ClientDetailPage({
         </Card>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="mb-6">
+        <DocumentUpload clientId={id} documents={documents || []} />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-sm font-semibold" style={{ color: "var(--text-muted)" }}>
@@ -207,6 +223,40 @@ export default async function ClientDetailPage({
                     </span>
                     <Badge value={inv.status} />
                   </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+        <Card>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold" style={{ color: "var(--text-muted)" }}>
+              Consulting
+            </h2>
+            <Link
+              href={`/consulting/new`}
+              className="text-xs hover:underline"
+              style={{ color: "var(--accent)" }}
+            >
+              + New
+            </Link>
+          </div>
+          {sessions.length === 0 ? (
+            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+              No sessions yet.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {sessions.map((s) => (
+                <li key={s.id} className="flex items-center justify-between text-sm">
+                  <Link
+                    href={`/consulting/${s.id}`}
+                    className="hover:underline"
+                    style={{ color: "var(--accent)" }}
+                  >
+                    {s.title || s.session_type}
+                  </Link>
+                  <Badge value={s.status} />
                 </li>
               ))}
             </ul>

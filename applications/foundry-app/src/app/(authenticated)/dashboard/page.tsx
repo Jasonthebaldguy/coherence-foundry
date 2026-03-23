@@ -31,6 +31,52 @@ export default async function DashboardPage() {
         />
       </div>
 
+      {/* AI Usage */}
+      <div
+        className="p-4 rounded-lg border mb-6"
+        style={{ background: "var(--bg-secondary)", borderColor: "var(--border)" }}
+      >
+        <h2 className="text-sm font-semibold mb-3" style={{ color: "var(--text-muted)" }}>
+          AI Usage &amp; Cost
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>Today</p>
+            <p className="text-lg font-semibold">
+              ${stats.apiUsage.todayCost < 0.01 ? stats.apiUsage.todayCost.toFixed(4) : stats.apiUsage.todayCost.toFixed(2)}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>This Month</p>
+            <p className="text-lg font-semibold">
+              ${stats.apiUsage.monthCost < 0.01 ? stats.apiUsage.monthCost.toFixed(4) : stats.apiUsage.monthCost.toFixed(2)}
+            </p>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              {stats.apiUsage.monthRequests} requests
+            </p>
+          </div>
+          <div>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>Month Tokens</p>
+            <p className="text-lg font-semibold">
+              {stats.apiUsage.monthTokens >= 1000000
+                ? `${(stats.apiUsage.monthTokens / 1000000).toFixed(2)}M`
+                : stats.apiUsage.monthTokens >= 1000
+                ? `${(stats.apiUsage.monthTokens / 1000).toFixed(1)}k`
+                : stats.apiUsage.monthTokens}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>All Time</p>
+            <p className="text-lg font-semibold">
+              ${stats.apiUsage.totalCost < 0.01 ? stats.apiUsage.totalCost.toFixed(4) : stats.apiUsage.totalCost.toFixed(2)}
+            </p>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              {stats.apiUsage.requestCount} total requests
+            </p>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div
           className="p-4 rounded-lg border"

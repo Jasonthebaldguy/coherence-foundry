@@ -5,13 +5,15 @@ import {
   getClientsForInvoice,
   getProjectsForInvoice,
   getNextInvoiceNumber,
+  getServiceItems,
 } from "@/lib/invoices";
 
 export default async function NewInvoicePage() {
-  const [clients, projects, nextNumber] = await Promise.all([
+  const [clients, projects, nextNumber, serviceItems] = await Promise.all([
     getClientsForInvoice(),
     getProjectsForInvoice(),
     getNextInvoiceNumber(),
+    getServiceItems(),
   ]);
 
   return (
@@ -29,6 +31,7 @@ export default async function NewInvoicePage() {
       <InvoiceForm
         clients={clients}
         projects={projects}
+        serviceItems={serviceItems}
         defaultInvoiceNumber={nextNumber}
         action={createInvoice}
       />

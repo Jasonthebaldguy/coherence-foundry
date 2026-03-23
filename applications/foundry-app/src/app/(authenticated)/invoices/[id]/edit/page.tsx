@@ -5,6 +5,7 @@ import {
   updateInvoice,
   getClientsForInvoice,
   getProjectsForInvoice,
+  getServiceItems,
 } from "@/lib/invoices";
 import InvoiceForm from "@/components/InvoiceForm";
 
@@ -22,9 +23,10 @@ export default async function EditInvoicePage({
     notFound();
   }
 
-  const [clients, projects] = await Promise.all([
+  const [clients, projects, serviceItems] = await Promise.all([
     getClientsForInvoice(),
     getProjectsForInvoice(),
+    getServiceItems(),
   ]);
 
   const boundUpdate = updateInvoice.bind(null, id);
@@ -45,6 +47,7 @@ export default async function EditInvoicePage({
         invoice={invoice}
         clients={clients}
         projects={projects}
+        serviceItems={serviceItems}
         defaultInvoiceNumber={invoice.invoice_number}
         action={boundUpdate}
       />
