@@ -482,6 +482,25 @@ export async function addMessage(
   if (error) throw error;
 }
 
+export async function deleteSession(sessionId: string) {
+  "use server";
+  const supabase = await createServerSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  // Delete messages, usage, and session (messages cascade via FK, usage cascades too)
+  const { error } = await supabase
+    .from("consulting_sessions")
+    .delete()
+    .eq("id", sessionId);
+
+  if (error) throw error;
+
+  revalidatePath("/consulting");
+}
+
 export async function completeSession(sessionId: string, formData: FormData) {
   "use server";
   const supabase = await createServerSupabase();

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, useActionState } from "react";
-import { completeSession } from "@/lib/consulting";
+import { useRouter } from "next/navigation";
+import { completeSession, deleteSession } from "@/lib/consulting";
 import type { ConsultingMessage } from "@/types/database";
 
 interface Usage {
@@ -15,10 +16,12 @@ export default function ChatUI({
   sessionId,
   initialMessages,
   isComplete,
+  sessionSummary,
 }: {
   sessionId: string;
   initialMessages: ConsultingMessage[];
   isComplete: boolean;
+  sessionSummary?: string | null;
 }) {
   const [messages, setMessages] = useState(
     initialMessages.filter((m) => m.role !== "system")
@@ -38,6 +41,9 @@ export default function ChatUI({
   const [summaryValue, setSummaryValue] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  const router = useRouter();
+  const [deleting, setDeleting] = useState(false);
+
   const boundComplete = completeSession.bind(null, sessionId);
   const [completeError, completeAction, completing] = useActionState(
     async (_prev: string | null, formData: FormData) => {
@@ -50,6 +56,18 @@ export default function ChatUI({
     },
     null
   );
+
+  async function handleDelete() {
+    if (!confirm("Delete this session and all its messages? This cannot be undone.")) return;
+    setDeleting(true);
+    try {
+      await deleteSession(sessionId);
+      router.push("/consulting");
+    } catch (e) {
+      setDeleting(false);
+      alert(`Failed to delete session: ${e instanceof Error ? e.message : "unknown error"}`);
+    }
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -311,12 +329,46 @@ export default function ChatUI({
             {completeError && (
               <p className="text-xs" style={{ color: "var(--red)" }}>{completeError}</p>
             )}
+
+            <div className="pt-2 border-t" style={{ borderColor: "var(--border)" }}>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="text-xs px-2 py-1 rounded"
+                style={{ color: "var(--red)", opacity: deleting ? 0.5 : 0.7 }}
+              >
+                {deleting ? "Deleting..." : "Delete Session"}
+              </button>
+            </div>
           </div>
         </div>
       ) : (
-        <p className="text-sm text-center py-2" style={{ color: "var(--text-muted)" }}>
-          This session is complete.
-        </p>
+        <div className="space-y-2">
+          {sessionSummary ? (
+            <div
+              className="p-3 rounded-lg text-xs whitespace-pre-wrap"
+              style={{ background: "var(--bg-tertiary)", color: "var(--text-primary)" }}
+            >
+              <span className="font-medium text-xs" style={{ color: "var(--text-muted)" }}>
+                Summary:
+              </span>
+              <div className="mt-1">{sessionSummary}</div>
+            </div>
+          ) : null}
+          <div className="flex items-center justify-between">
+            <span className="text-sm" style={{ color: "var(--text-muted)" }}>
+              This session is complete.
+            </span>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="text-xs px-2 py-1 rounded"
+              style={{ color: "var(--red)", opacity: deleting ? 0.5 : 0.7 }}
+            >
+              {deleting ? "Deleting..." : "Delete Session"}
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

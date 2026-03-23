@@ -48,6 +48,7 @@ export default async function ConsultingSessionPage({
         sessionId={id}
         initialMessages={messages}
         isComplete={session.status === "complete"}
+        sessionSummary={session.summary}
       />
     </div>
   );

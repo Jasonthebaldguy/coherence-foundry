@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase-server";
 import { addMessage, getMessages, getSession } from "@/lib/consulting";
 
-// Load from env — set in .env.local
-const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || "";
-const BRAVE_KEY = process.env.BRAVE_SEARCH_API_KEY || "";
+// Read at request time to avoid turbopack caching stale values
+function getAnthropicKey() { return process.env.ANTHROPIC_API_KEY || ""; }
+function getBraveKey() { return process.env.BRAVE_SEARCH_API_KEY || ""; }
 
 // Tool definitions for Claude
 const tools = [
@@ -134,7 +134,7 @@ const tools = [
 // ---------------------------------------------------------------------------
 
 async function executeWebSearch(query: string): Promise<string> {
-  const braveKey = BRAVE_KEY;
+  const braveKey = getBraveKey();
   if (!braveKey) {
     return "Web search is not configured. Add BRAVE_SEARCH_API_KEY to .env.local to enable.";
   }
@@ -445,7 +445,7 @@ export async function POST(request: NextRequest) {
     messages.find((m) => m.role === "system")?.content || "";
 
   // Call Claude API
-  const apiKey = ANTHROPIC_KEY;
+  const apiKey = getAnthropicKey();
 
   if (!apiKey) {
     const fallback =

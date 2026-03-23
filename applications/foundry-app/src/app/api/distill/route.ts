@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase-server";
 
-const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || "";
 
 const DISTILLATION_PROMPT = `You are a concept distillation engine. Your task is lossless semantic compression —
 extract every structurally complete concept from this consulting conversation, collapse redundancy,
@@ -121,7 +120,9 @@ export async function POST(request: NextRequest) {
 
   console.log(`[DISTILL] Transcript length: ${transcript.length} chars, ${conversationMessages.length} messages`);
 
-  if (!ANTHROPIC_KEY) {
+  const anthropicKey = process.env.ANTHROPIC_API_KEY || "";
+
+  if (!anthropicKey) {
     return NextResponse.json(
       { error: "ANTHROPIC_API_KEY not configured" },
       { status: 500 }
@@ -139,7 +140,7 @@ export async function POST(request: NextRequest) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": ANTHROPIC_KEY,
+          "x-api-key": anthropicKey,
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
@@ -220,6 +221,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (e) {
     const errMsg = e instanceof Error ? e.message : "Distillation failed";
+    console.error("[DISTILL] Error:", errMsg, e);
     return NextResponse.json({ error: errMsg }, { status: 500 });
   }
 }
