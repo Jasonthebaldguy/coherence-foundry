@@ -17,9 +17,67 @@ export default async function SettingsPage() {
       .replace(/_/g, " ")
       .replace(/\b\w/g, (c) => c.toUpperCase());
 
+  // Read .env.local directly to check key status (turbopack doesn't reliably expose non-NEXT_PUBLIC_ vars)
+  let envContent = "";
+  try {
+    const fs = require("fs");
+    const path = require("path");
+    envContent = fs.readFileSync(path.join(process.cwd(), ".env.local"), "utf8");
+  } catch {
+    // .env.local doesn't exist
+  }
+  const hasEnvKey = (key: string) => envContent.includes(`${key}=`) && !envContent.includes(`${key}=\n`);
+
+  const apiKeys = [
+    { name: "Anthropic API", env: "ANTHROPIC_API_KEY", configured: hasEnvKey("ANTHROPIC_API_KEY"), url: "https://console.anthropic.com/settings/keys" },
+    { name: "Brave Search", env: "BRAVE_SEARCH_API_KEY", configured: hasEnvKey("BRAVE_SEARCH_API_KEY"), url: "https://brave.com/search/api/" },
+    { name: "Supabase", env: "NEXT_PUBLIC_SUPABASE_URL", configured: hasEnvKey("NEXT_PUBLIC_SUPABASE_URL"), url: "https://supabase.com/dashboard" },
+  ];
+
   return (
     <div className="max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold mb-6">Settings</h1>
+
+      {/* API Keys Status */}
+      <section className="mb-10">
+        <h2 className="text-lg font-semibold mb-4 border-b pb-2">
+          API Keys Status
+        </h2>
+        <p className="text-sm text-gray-600 mb-4">
+          API keys are configured in <code className="text-xs bg-gray-100 px-1.5 py-0.5 rounded">.env.local</code> — never stored in the database for security.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {apiKeys.map((key) => (
+            <div
+              key={key.name}
+              className="flex items-center gap-2 p-3 rounded-lg border"
+              style={{
+                borderColor: key.configured ? "var(--green, #22c55e)" : "var(--border)",
+                background: key.configured ? "rgba(34, 197, 94, 0.05)" : "var(--bg-secondary)",
+              }}
+            >
+              <span className="text-lg">{key.configured ? "✅" : "⚠️"}</span>
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium">{key.name}</p>
+                  <a
+                    href={key.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs hover:underline"
+                    style={{ color: "var(--accent)" }}
+                  >
+                    Get key →
+                  </a>
+                </div>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  {key.configured ? "Configured" : `Not set — add ${key.env} to .env.local`}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* Organization Settings */}
       <section className="mb-10">

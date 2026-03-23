@@ -464,28 +464,55 @@ export async function POST(request: NextRequest) {
     while (maxIterations > 0) {
       maxIterations--;
 
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 4096,
-          system: systemMessage,
-          messages: currentMessages,
-          tools,
-        }),
-      });
+      // Call with retry on rate limit
+      let response: Response | null = null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let data: any = null;
 
-      if (!response.ok) {
-        const err = await response.text();
-        throw new Error(`Anthropic API error: ${response.status} ${err}`);
+      for (let attempt = 0; attempt < 3; attempt++) {
+        response = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": apiKey,
+            "anthropic-version": "2023-06-01",
+            "anthropic-beta": "prompt-caching-2024-07-31",
+          },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-20250514",
+            max_tokens: 4096,
+            system: [
+              {
+                type: "text",
+                text: systemMessage,
+                cache_control: { type: "ephemeral" },
+              },
+            ],
+            messages: currentMessages,
+            tools,
+          }),
+        });
+
+        if (response.status === 429) {
+          // Rate limited — wait and retry
+          const retryAfter = response.headers.get("retry-after");
+          const waitMs = retryAfter ? parseInt(retryAfter) * 1000 : (attempt + 1) * 15000;
+          await new Promise((r) => setTimeout(r, waitMs));
+          continue;
+        }
+
+        if (!response.ok) {
+          const err = await response.text();
+          throw new Error(`Anthropic API error: ${response.status} ${err}`);
+        }
+
+        data = await response.json();
+        break;
       }
 
-      const data = await response.json();
+      if (!data) {
+        throw new Error("Rate limited after 3 retries. Try again in a minute.");
+      }
 
       // Accumulate token usage
       if (data.usage) {
