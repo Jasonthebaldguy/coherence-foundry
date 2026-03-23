@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+:root {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8f9fa;
+  --bg-tertiary: #e9ecef;
+  --text-primary: #1a1a2e;
+  --text-secondary: #495057;
+  --text-muted: #868e96;
+  --accent: #4263eb;
+  --accent-light: #edf2ff;
+  --border: #dee2e6;
+  --red: #e03131;
+  --green: #2f9e44;
+  --yellow: #f08c00;
+  --orange: #e8590c;
+}
+
+@theme inline {
+  --color-background: var(--bg-primary);
+  --color-foreground: var(--text-primary);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #16213e;
+    --bg-tertiary: #0f3460;
+    --text-primary: #e9ecef;
+    --text-secondary: #adb5bd;
+    --text-muted: #868e96;
+    --accent: #748ffc;
+    --accent-light: #1a1a3e;
+    --border: #2d3a5a;
+    --red: #ff6b6b;
+    --green: #51cf66;
+    --yellow: #ffd43b;
+    --orange: #ff922b;
+  }
+}
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+input, textarea, select {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-light);
+}
+
+button {
+  cursor: pointer;
+}
